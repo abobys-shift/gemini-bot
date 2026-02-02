@@ -15,8 +15,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-# Список моделей, між якими будемо перемикатись
-# Я зібрав тут ті, що були в твоєму списку + стандартні
+# Твій список моделей (без змін)
 AVAILABLE_MODELS = {
     "gemini-2.5-flash": "⚡️ 2.5 Flash (20/day)",
     "gemini-2.5-flash-lite": "⚡️ 2.5 Flash-Lite (20/day)",
@@ -43,7 +42,6 @@ safety_settings = {
 }
 
 # Словник для зберігання налаштувань користувачів
-# user_data[chat_id] = {"model_name": "...", "chat_session": ...}
 user_data = {}
 
 logging.basicConfig(
@@ -51,74 +49,93 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# === ДОПОМІЖНА ФУНКЦІЯ: ОТРИМАТИ СЕСІЮ ===
-def get_user_session(chat_id):
-    if chat_id not in user_data:
-        # Якщо користувача немає - створюємо з дефолтною моделлю
-        model = genai.GenerativeModel(
-            DEFAULT_MODEL,
+# === ФІКС ДЛЯ GEMMA ===
+# Ця функція дивиться: якщо модель gemma - не дає їй system_instruction
+def create_model(model_name):
+    if "gemma" in model_name:
+        return genai.GenerativeModel(
+            model_name,
+            safety_settings=safety_settings
+        )
+    else:
+        return genai.GenerativeModel(
+            model_name,
             system_instruction=system_instruction,
             safety_settings=safety_settings
         )
-        user_data[chat_id] = {
-            "model_name": DEFAULT_MODEL,
-            "session": model.start_chat(history=[])
-        }
+
+# === ОТРИМАТИ СЕСІЮ ===
+def get_user_session(chat_id):
+    if chat_id not in user_data:
+        # Створення через нашу функцію
+        try:
+            model = create_model(DEFAULT_MODEL)
+            user_data[chat_id] = {
+                "model_name": DEFAULT_MODEL,
+                "session": model.start_chat(history=[])
+            }
+        except Exception as e:
+            # Резерв на випадок помилки дефолтної
+            fallback = "gemini-2.5-flash"
+            user_data[chat_id] = {
+                "model_name": fallback,
+                "session": create_model(fallback).start_chat(history=[])
+            }
     return user_data[chat_id]
 
-# === КОМАНДА /mode - ВИБІР МОДЕЛІ ===
+# === КОМАНДА /mode ===
 async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
-    # Створюємо кнопки для кожної моделі
     for model_code, model_name in AVAILABLE_MODELS.items():
         keyboard.append([InlineKeyboardButton(model_name, callback_data=f"set_model|{model_code}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    current_model = get_user_session(update.effective_chat.id)["model_name"]
+    # Отримуємо поточну модель безпечно
+    current_model = user_data.get(update.effective_chat.id, {}).get("model_name", DEFAULT_MODEL)
+    
     await update.message.reply_text(
         f"🔧 **Поточна модель:** `{current_model}`\n\nОбери іншу, якщо ця не працює:",
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN
     )
 
-# === ОБРОБКА НАТИСКАННЯ КНОПОК ===
+# === ОБРОБКА КНОПОК ===
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() # Підтверджуємо натискання
+    await query.answer()
 
     data = query.data.split("|")
     if data[0] == "set_model":
         new_model_name = data[1]
         chat_id = update.effective_chat.id
         
-        # Створюємо нову сесію з новою моделлю
         try:
-            model = genai.GenerativeModel(
-                new_model_name,
-                system_instruction=system_instruction,
-                safety_settings=safety_settings
-            )
+            # Використовуємо create_model
+            model = create_model(new_model_name)
+            
             user_data[chat_id] = {
                 "model_name": new_model_name,
                 "session": model.start_chat(history=[])
             }
             
-            await query.edit_message_text(f"✅ Готово! Модель змінено на: `{new_model_name}`\nКонтекст оновлено.")
+            # Гарна назва для кнопки
+            pretty_name = AVAILABLE_MODELS.get(new_model_name, new_model_name)
+            await query.edit_message_text(f"✅ Готово! Модель змінено на: `{pretty_name}`\nКонтекст оновлено.")
         except Exception as e:
             await query.edit_message_text(f"❌ Не вдалося переключити: {e}")
 
 # === КОМАНДА /new ===
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    # Просто скидаємо сесію поточної моделі
-    current = get_user_session(chat_id)
-    model = genai.GenerativeModel(
-        current["model_name"],
-        system_instruction=system_instruction,
-        safety_settings=safety_settings
-    )
-    user_data[chat_id]["session"] = model.start_chat(history=[])
+    
+    if chat_id in user_data:
+        current_name = user_data[chat_id]["model_name"]
+        # Перезапускаємо через create_model
+        model = create_model(current_name)
+        user_data[chat_id]["session"] = model.start_chat(history=[])
+    else:
+        get_user_session(chat_id)
     
     await update.message.reply_text("♻️ Контекст очищено!")
 
@@ -128,7 +145,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_session = get_user_session(chat_id)
     chat_session = user_session["session"]
 
-    # Індикація дії
     action = 'upload_photo' if update.message.photo else 'typing'
     await context.bot.send_chat_action(chat_id=chat_id, action=action)
 
@@ -136,7 +152,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response_text = ""
         user_input = []
         
-        # Обробка фото
         if update.message.photo:
             photo_file = await update.message.photo[-1].get_file()
             image_stream = io.BytesIO()
@@ -149,11 +164,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif update.message.text:
             user_input.append(update.message.text)
 
-        # Відправка запиту
         response = chat_session.send_message(user_input)
         response_text = response.text
 
-        # Відправка відповіді (з розбиттям)
         if len(response_text) > 4000:
             for x in range(0, len(response_text), 4000):
                 chunk = response_text[x:x+4000]
@@ -173,20 +186,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(f"⚠️ **Помилка:** `{error_msg}`", parse_mode=ParseMode.MARKDOWN)
         
-        # Якщо помилка про ліміти або 404 - пропонуємо змінити модель
-        if "429" in error_msg or "404" in error_msg:
+        if "429" in error_msg or "404" in error_msg or "400" in error_msg:
              await update.message.reply_text("👇 Спробуй змінити модель командою /mode")
 
 if __name__ == '__main__':
     keep_alive() 
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
-    # Реєструємо команди
     application.add_handler(CommandHandler("new", start_command))
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("mode", mode_command)) # Нова команда
-    
-    # Реєструємо обробник кнопок
+    application.add_handler(CommandHandler("mode", mode_command))
     application.add_handler(CallbackQueryHandler(button_handler))
 
     filter_rules = (filters.TEXT | filters.PHOTO) & (~filters.COMMAND)
@@ -194,6 +203,3 @@ if __name__ == '__main__':
     
     print("Бот мульти-модельний запущено!")
     application.run_polling()
-
-
-
