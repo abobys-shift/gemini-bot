@@ -19,8 +19,8 @@ genai.configure(api_key=GOOGLE_API_KEY)
 # Я зібрав тут ті, що були в твоєму списку + стандартні
 AVAILABLE_MODELS = {
     "gemini-2.5-flash": "⚡️ 2.5 Flash (20/day)",
-    "gemini-2.5-flash-lite": "⚡️ 2.5 Flash-Lite (20/day)"
-    "gemini-3-flash-preview": "⚡️ 3 Flash (20/day)"
+    "gemini-2.5-flash-lite": "⚡️ 2.5 Flash-Lite (20/day)",
+    "gemini-3-flash-preview": "⚡️ 3 Flash (20/day)",
     "gemini-2.5-flash-preview-tts": "⚡️ 2.5 Flash-tts (10/day)"
 }
 
@@ -193,4 +193,5 @@ if __name__ == '__main__':
     
     print("Бот мульти-модельний запущено!")
     application.run_polling()
+
 
