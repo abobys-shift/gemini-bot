@@ -33,7 +33,7 @@ safety_settings = {
 }
 
 model = genai.GenerativeModel(
-    'gemini-2.0-flash',
+    'gemini-1.5-flash',
     system_instruction=system_instruction,
     safety_settings=safety_settings  # <-- Додали налаштування сюди
 )
@@ -109,4 +109,5 @@ if __name__ == '__main__':
     filter_rules = (filters.TEXT | filters.PHOTO) & (~filters.COMMAND)
     application.add_handler(MessageHandler(filter_rules, handle_message))
     application.run_polling()
+
 
