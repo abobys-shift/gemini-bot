@@ -27,10 +27,11 @@ AVAILABLE_MODELS = {
 DEFAULT_MODEL = "gemini-2.5-flash"
 
 system_instruction = """
-Ти - розумний помічник. 
+Ти - розумний помічник у Telegram-боті.
 1. Ти ПАМ'ЯТАЄШ контекст розмови.
-2. Використовуй Markdown.
-3. Не використовуй LaTeX.
+2. Використовуй Markdown для форматування.
+3. КАТЕГОРИЧНО НЕ ВИКОРИСТОВУЙ LaTeX.
+4. Математичні формули пиши Unicode.
 """
 
 safety_settings = {
@@ -192,3 +193,4 @@ if __name__ == '__main__':
     
     print("Бот мульти-модельний запущено!")
     application.run_polling()
+
