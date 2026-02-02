@@ -21,7 +21,8 @@ AVAILABLE_MODELS = {
     "gemini-2.5-flash": "⚡️ 2.5 Flash (20/day)",
     "gemini-2.5-flash-lite": "⚡️ 2.5 Flash-Lite (20/day)",
     "gemini-3-flash-preview": "⚡️ 3 Flash (20/day)",
-    "gemini-2.5-flash-preview-tts": "⚡️ 2.5 Flash-tts (10/day)"
+    "gemini-2.5-flash-preview-tts": "⚡️ 2.5 Flash-tts (10/day)",
+    "gemma-3-27b-it": "мусор який працює завжди"
 }
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -193,5 +194,6 @@ if __name__ == '__main__':
     
     print("Бот мульти-модельний запущено!")
     application.run_polling()
+
 
 
